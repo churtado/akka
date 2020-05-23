@@ -16,26 +16,35 @@ abstract class MyList[+A] {
 
   def foreach(x:A => Unit): Unit  //[1,2,3].foreach(x => println(x))
   def sort( f:(A, A) => Int): MyList[A] // [1,2,3].sort((x,y)=> y-x) = [3,2,1] the function returns -1 if left term
-  def zipWith[B](list: MyList[A], f:(A,A) => B): MyList[B]
+  def zipWith[B,C](list:MyList[B], f:(A,B) => C): MyList[C] //[1,2,3].zipWith([4,5,6], x*y) => [1*4,2*5,3*6]
+  def fold[B](start:B)(operator: (B,A) => B): B
 
   def ++[B >: A](list: MyList[B]) : MyList[B]
 }
 
 case object Empty extends MyList[Nothing] {
-  def head: Nothing = throw new NoSuchElementException
-  def tail: MyList[Nothing] = throw new NoSuchElementException
-  def isEmpty: Boolean = true
-  def add[B >: Nothing](element: B): MyList[B] = new Cons(element, Empty)
-  def printElements = ""
+  override def head: Nothing = throw new NoSuchElementException
+  override def tail: MyList[Nothing] = throw new NoSuchElementException
+  override def isEmpty: Boolean = true
+  override def add[B >: Nothing](element: B): MyList[B] = new Cons(element, Empty)
+  override def printElements = ""
 
-  def map[B](transformer: Nothing => B): MyList[B] = Empty
-  def flatMap[B](transformer: Nothing => MyList[B]): MyList[B] = Empty
-  def filter(predicate: Nothing => Boolean): MyList[Nothing] = Empty
+  override def map[B](transformer: Nothing => B): MyList[B] = Empty
+  override def flatMap[B](transformer: Nothing => MyList[B]): MyList[B] = Empty
+  override def filter(predicate: Nothing => Boolean): MyList[Nothing] = Empty
 
-  def foreach(x:Nothing => Unit): Unit = Unit
-  def sort( f:(Nothing, Nothing) => Int): MyList[Nothing] = Empty
+  override def foreach(x:Nothing => Unit): Unit = Unit
 
-  def ++[B >: Nothing](list: MyList[B]) : MyList[B] = list
+  override def sort( f:(Nothing, Nothing) => Int): MyList[Nothing] = Empty
+
+  override def zipWith[B, C](list: MyList[B], f: (Nothing, B) => C): MyList[C] =
+    if(!list.isEmpty) throw new RuntimeException("lists don't have the same length")
+    else Empty
+
+  override def fold[B](start: B)(operator:(B, Nothing) => B) = start
+
+  override def ++[B >: Nothing](list: MyList[B]) : MyList[B] = list
+
 }
 
 case class Cons[+A](h: A, t: MyList[A]) extends MyList[A] {
@@ -67,7 +76,7 @@ case class Cons[+A](h: A, t: MyList[A]) extends MyList[A] {
     transformer(h) ++ t.flatMap(transformer)
   }
 
-  def concatenator: (String, String) => String = new Function2[String, String, String] {
+  def concatenator: (String, String) => String = new ((String, String) => String) {
     override def apply(v1: String, v2: String): String = {
       return v1 + v2
     }
@@ -99,6 +108,24 @@ case class Cons[+A](h: A, t: MyList[A]) extends MyList[A] {
     val sortedTail = t.sort(compare)
     insert(h, sortedTail)
   }
+
+  override def zipWith[B, C](list: MyList[B], f: (A, B) => C): MyList[C] =
+    if(list.isEmpty) throw new RuntimeException("lists don't have the same length")
+    else new Cons(f(h, list.head), t.zipWith(list.tail,f))
+
+  /*
+  [1,2,3].fold(0)(+) =
+  [2,3].fold(1+0) =
+  [2,3].fold(1) =
+  [3].fold(1+2) =
+  [3].fold(3) =
+  [].fold(3+3) =
+  [].fold(6) =
+  6
+  ((([].fold(3+3))).fold(1+2)).fold(1+0)).fold(0)(+)
+   */
+  override def fold[B](start: B)(operator:(B,A)=>B): B =
+    t.fold(operator(start,h)) (operator)
 
 }
 
@@ -135,4 +162,23 @@ object ListTest extends App {
   foreach method A => Unit
   [1,2,3].foreach(x=> println(x)
    */
+
+  /*
+  1 + 2 = 3
+
+   */
+  def toCurry(f:(Int, Int) => Int): (Int=>Int=>Int)  = {
+    x => y => f(x,y)
+  }
+
+  def fromCurry(f:(Int=>Int=>Int)) : (Int, Int) => Int = {
+    (x, y) => f(x)(y)
+  }
+
+  def compose[A,B,T](f: A => B,g: T => A) : T => B =
+    x => f(g(x))
+
+  def andThen[A,B,T](f: A => T, g: T => B) : A => B =
+    x => g(f(x))
+
 }
